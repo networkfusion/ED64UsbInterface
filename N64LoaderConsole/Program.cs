@@ -2,18 +2,15 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-//using System.IO.Ports;
 using RJCP.IO.Ports;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using System.Threading;
 
 namespace N64LoaderConsole
 {
     internal class Program
     {
-        //private static SerialPort port;
         private static SerialPortStream port = new SerialPortStream();
         private static bool connected = false;
         private static byte[] sendBuffer = new byte[512];
@@ -24,9 +21,11 @@ namespace N64LoaderConsole
 
 
             Console.WriteLine("**********************************");
-            Console.WriteLine("ED64 usb loader v1.0");
+            Console.WriteLine("ED64 usb ROM loader v1.0");
+            Console.WriteLine("**********************************");
 
             InitialiseSerialPort();
+
             try
             {
                 if (connected == false && port != null && port.IsOpen)
@@ -40,46 +39,41 @@ namespace N64LoaderConsole
             }
             if (connected == false)
             {
-                Console.WriteLine("ED64 usb port not detected");
+                Console.WriteLine("ED64's usb port not detected");
                 return;
             }
+            if (args.Length != 0)
+            {
+                if (!string.IsNullOrEmpty(args[0]))
+                {
+                    Console.WriteLine("No ROM specified, exiting");
+                    WriteRom(args[0]);
 
-            WriteRom(args[0]);
 
-            
-            var startPacket = new CommandPacket(CommandPacket.Command.StartRom);
-            //sendBuffer[3] = 83; //S (pif boot)
-            //port.Write(sendBuffer, 0, 512);
-            startPacket.Send(port);
+                    var startPacket = new CommandPacket(CommandPacket.Command.StartRom, 508);
+                    startPacket.Send(port);
+                }
+            }
+
             port.Close();
         }
 
         private static void InitialiseSerialPort()
         {
-            //string[] portNames = port.GetPortNames();
             string[] portNames = SerialPortStream.GetPortNames();
-            
-            //sendBuffer[0] = 67; //C
-            //sendBuffer[1] = 77; //M
-            //sendBuffer[2] = 68; //D
-            //sendBuffer[3] = 84; //T (test)
-            var testPacket = new CommandPacket(CommandPacket.Command.TestConnection);
+            var testPacket = new CommandPacket(CommandPacket.Command.TestConnection,508);
 
             for (int i = 0; i < portNames.Length; i++)
             {
                 try
                 {
-                    //port = new SerialPort(portNames[i]);
                     port = new SerialPortStream(portNames[i]);
-                    port.WriteTimeout = 10500;
-                    port.ReadTimeout = 10500;
+                    port.WriteTimeout = 500;
+                    port.ReadTimeout = 500;
                     port.Open();
-                    //port.Write(sendBuffer, 0, 512);
-                    port.Write(testPacket.Packet, 0, testPacket.Packet.Length);
-                    //testPacket.Send(port);
-                    Thread.Sleep(100);
+                    testPacket.Send(port);
 
-                    port.Read(receiveBuffer, 0 , 4);
+                    port.Read(receiveBuffer, 0 , 512); //should be 4 if not 512
                     //ReadResponse(port, 4); //expect RSPk
 
                     if (receiveBuffer[3] != 107) //k
@@ -100,7 +94,7 @@ namespace N64LoaderConsole
 
         public static void WriteRom(string fileName)
         {
-            FileStream fileStream = File.OpenRead(fileName);
+            FileStream fileStream = File.OpenRead(fileName); //TODO: should be enclosed in a using statement
             int fileLength = (int)fileStream.Length;
             if ((long)(fileLength / 65536 * 65536) != fileStream.Length)
             {
@@ -113,19 +107,13 @@ namespace N64LoaderConsole
 
             if (fileLength < 2097152) //0x200000 //needs filling
             {
-                //sendBuffer[0] = 67; //C
-                //sendBuffer[1] = 77; //M
-                //sendBuffer[2] = 68; //D
-                //sendBuffer[3] = 70; //F (fill)
-                var fillPacket = new CommandPacket(CommandPacket.Command.Fill);
-
-                //port.Write(sendBuffer, 0, 512);
+                var fillPacket = new CommandPacket(CommandPacket.Command.Fill, 508);
                 fillPacket.Send(port);
-                for (int k = 0; k < 512; k++)
-                {
-                    port.Read(sendBuffer, k, 512 - k); //surely this should be the receive buffer!
-                }
-                if (sendBuffer[3] != 107) //surely this should be the receive buffer!
+
+
+                port.Read(receiveBuffer, 0, 512);
+
+                if (receiveBuffer[3] != 107)
                 {
                     Console.WriteLine("fill error");
                     port.Close();
@@ -133,23 +121,16 @@ namespace N64LoaderConsole
                 }
                 Console.WriteLine("fill ok");
             }
-            //sendBuffer[0] = 67; //C
-            //sendBuffer[1] = 77; //M
-            //sendBuffer[2] = 68; //D
-            //sendBuffer[3] = 87; //W (write)
-            var writePacket = new CommandPacket(CommandPacket.Command.WriteRom, 4);
-            //sendBuffer[4] = 0; //offset
-            //sendBuffer[5] = 0; //offset
-            //sendBuffer[6] = (byte)(fileArray.Length / 512 >> 8);
-            //sendBuffer[7] = (byte)(fileArray.Length / 512);
+
+            var writePacket = new CommandPacket(CommandPacket.Command.WriteRom, 508); //4 if not 508
+
             var commandInfo = new byte[4];
             commandInfo[0] = 0; //offset
             commandInfo[1] = 0; //offset
             commandInfo[2] = (byte)(fileArray.Length / 512 >> 8);
             commandInfo[3] = (byte)(fileArray.Length / 512);
-            writePacket.body(commandInfo);
 
-            //port.Write(sendBuffer, 0, 512);
+            writePacket.body(commandInfo);
             writePacket.Send(port);
 
             Console.WriteLine("sending...");
@@ -159,17 +140,12 @@ namespace N64LoaderConsole
                 if (l == 33554432)
                 {
                     Console.WriteLine("next 32m!!!!!!!!!!!!!!!");
-                    //sendBuffer[4] = 64; //0x40 - 32mb offset
-                    //sendBuffer[5] = 0;
-                    //sendBuffer[6] = (byte)((fileArray.Length - 33554432) / 512 >> 8);
-                    //sendBuffer[7] = (byte)((fileArray.Length - 33554432) / 512);
+
                     commandInfo[0] = 64; //0x40 - 32mb offset
                     commandInfo[1] = 0;
                     commandInfo[2] = (byte)((fileArray.Length - 33554432) / 512 >> 8);
                     commandInfo[3] = (byte)((fileArray.Length - 33554432) / 512);
                     writePacket.body(commandInfo);
-
-                    //port.Write(sendBuffer, 0, 512);
                     writePacket.Send(port);
                 }
                 port.Write(fileArray, l, 32768);
