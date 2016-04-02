@@ -6,6 +6,7 @@ using RJCP.IO.Ports;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Threading;
 
 namespace N64LoaderConsole
 {
@@ -18,10 +19,11 @@ namespace N64LoaderConsole
 
         private static void Main(string[] args)
         {
-
+            //var Device = new FindDevice();
+            //var ports = Device.FindFdtiUsbDevices();
 
             Console.WriteLine("**********************************");
-            Console.WriteLine("ED64 usb ROM loader v1.0");
+            Console.WriteLine("ED64 USB ROM Loader V1.0");
             Console.WriteLine("**********************************");
 
             InitialiseSerialPort();
@@ -36,6 +38,7 @@ namespace N64LoaderConsole
             catch (Exception ex)
             {
                 Console.WriteLine("error: " + ex.ToString());
+                Console.ReadLine();
             }
             if (connected == false)
             {
@@ -54,20 +57,29 @@ namespace N64LoaderConsole
                     startPacket.Send(port);
                 }
             }
+            else
+            {
+                Console.WriteLine("No ROM specified, exiting.");
+                Console.ReadLine();
+            }
 
             port.Close();
         }
 
         private static void InitialiseSerialPort()
-        {
-            string[] portNames = SerialPortStream.GetPortNames();
-            var testPacket = new CommandPacket(CommandPacket.Command.TestConnection,508);
+        {            
+            Console.WriteLine("Waiting for Everdrive64 USB to be connected");
+            while (FindDevice.FindFdtiUsbDevices().Where(p => p.nodeDescription == "FT245R USB FIFO").Count() == 0)
+            {
+                Thread.Sleep(500);
+            }
 
-            for (int i = 0; i < portNames.Length; i++)
+            var testPacket = new CommandPacket(CommandPacket.Command.TestConnection, 508);
+            foreach (var device in FindDevice.FindFdtiUsbDevices().Where(p => p.nodeDescription == "FT245R USB FIFO"))
             {
                 try
                 {
-                    port = new SerialPortStream(portNames[i]);
+                    port = new SerialPortStream(device.nodeComportName);
                     port.WriteTimeout = 500;
                     port.ReadTimeout = 500;
                     port.Open();
@@ -79,15 +91,16 @@ namespace N64LoaderConsole
                     if (receiveBuffer[3] != 107) //k
                     {
                         port.Close();
-                        throw new Exception("no response form " + portNames[i]);
+                        throw new Exception("no response form " + device.nodeDescription);
                     }
-                    Debug.WriteLine("ED64 port: " + portNames[i]);
+                    Console.WriteLine("Connected to EverDrive64 on port: " + device.nodeComportName);
                     connected = true;
                     break;
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine("error: " + ex.ToString());
+                    Console.WriteLine("error: " + ex.ToString());
+                    Console.ReadLine();
                 }
             }
         }
