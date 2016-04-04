@@ -23,23 +23,19 @@ namespace N64LoaderConsole
             Console.WriteLine("**********************************");
             if (args.Length != 0 && !string.IsNullOrEmpty(args[0]))
             {
-                var connected = InitialiseSerialPort();
-
-                if (connected)
+                if (InitialiseSerialPort())
                 {
                     Console.WriteLine("Writing ROM...");
                     //todo: detect file type is correct, if not convert
-                    WriteRom(args[0]);
+                    WriteRom(args[0].ToString());
 
-
+                    Thread.Sleep(1000); //TODO: testing to see if the rom image is not ready, remove if possible!
                     var startPacket = new CommandPacket(CommandPacket.Command.StartRom, 508);
-                    startPacket.Send(IoPort);
-
-                    IoPort.Close();
+                    startPacket.Send(IoPort);                    
                 }
                 else
                 {
-                    Console.WriteLine("ED64's usb port not detected");
+                    Console.WriteLine("No response received");
                 }
 
             }
@@ -49,8 +45,21 @@ namespace N64LoaderConsole
                 Console.WriteLine(@"No ROM specified, e.g. ""loader.exe c:\mycart.v64"".");
             }
 
-            Console.WriteLine(@"Press any key to exit.");
+            if (IoPort.IsOpen)
+            {
+                IoPort.Close();
+            }
+
+            Console.WriteLine("Press any key to exit.");
             Console.ReadLine();
+        }
+
+        ~Program()
+        {
+            if (IoPort.IsOpen)
+            {
+                IoPort.Close();
+            }
         }
 
         private static bool InitialiseSerialPort()
@@ -75,21 +84,15 @@ namespace N64LoaderConsole
                     IoPort.Read(receiveBuffer, 0 , 512); //should be 4 if not 512
                     //ReadResponse(port, 4); //expect RSPk
 
-                    if (receiveBuffer[3] != 107) //k
+                    if (receiveBuffer[3] == 107) //k
                     {
-                        IoPort.Close();
-                        //throw new Exception("no response form " + device.nodeDescription);
-                    }
-                    else
-                    {
-                        Console.WriteLine("Connected to EverDrive64 on port: " + device.nodeComportName);
+                        Console.WriteLine("Connected to EverDrive64 on port: {0}", device.nodeComportName);
                         return true;
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine("error: " + ex.ToString());
-                    Console.ReadLine();
+                    Console.WriteLine("error: {0}", ex.ToString());
                 }
             }
             return false;
@@ -97,23 +100,24 @@ namespace N64LoaderConsole
 
         public static void WriteRom(string fileName)
         {
-            int fileLength;
+            int fileLength = 0;
             byte[] fileArray;
 
             using (FileStream fileStream = File.OpenRead(fileName))
             {
                 fileLength = (int)fileStream.Length;
-                if ((long)(fileLength / 65536 * 65536) != fileStream.Length)
+                if ((long)(fileLength / 0x10000 * 0x10000) != fileStream.Length) //65536
                 {
-                    fileLength = (int)(fileStream.Length / 65536L * 65536L + 65536L);
+                    fileLength = (int)(fileStream.Length / 0x10000 * 0x10000 + 0x10000);
                 }
                 fileArray = new byte[fileLength];
                 fileStream.Read(fileArray, 0, (int)fileStream.Length);
             }
             Console.WriteLine("File Size: " + fileLength);
 
-            if (fileLength < 2097152) //0x200000 //needs filling
+            if (fileLength < 0x200000) //2097152 //needs filling
             {
+                Console.WriteLine("Generating space for ROM");
                 var fillPacket = new CommandPacket(CommandPacket.Command.Fill, 508);
                 fillPacket.Send(IoPort);
 
@@ -122,12 +126,12 @@ namespace N64LoaderConsole
 
                 if (receiveBuffer[3] != 107)
                 {
-                    Console.WriteLine("fill error");
+                    Console.WriteLine("Error generating space required, exiting");
                     return;
                 }
                 else
                 {
-                    Console.WriteLine("fill ok");
+                    Console.WriteLine("ROM space generated");
                 }
             }
 
@@ -142,36 +146,38 @@ namespace N64LoaderConsole
             writePacket.body(commandInfo);
             writePacket.Send(IoPort);
 
-            Console.WriteLine("sending...");
+            Console.WriteLine("Sending ROM...");
             DateTime now = DateTime.Now;
-            for (int l = 0; l < fileArray.Length; l += 32768)
+            for (int l = 0; l < fileArray.Length; l += 0x8000) //32768 (256KB)
             {
-                if (l == 33554432)
+                if (l == 0x2000000) // 33554432 (32MB)
                 {
-                    Console.WriteLine("next 32m!!!!!!!!!!!!!!!");
+                    Console.WriteLine("Sending next 32MB chunk");
 
-                    commandInfo[0] = 64; //0x40 - 32mb offset
+                    commandInfo[0] = 0x40; //64 - 32MB offset
                     commandInfo[1] = 0;
-                    commandInfo[2] = (byte)((fileArray.Length - 33554432) / 512 >> 8);
-                    commandInfo[3] = (byte)((fileArray.Length - 33554432) / 512);
+                    commandInfo[2] = (byte)((fileArray.Length - 0x2000000) / 512 >> 8);
+                    commandInfo[3] = (byte)((fileArray.Length - 0x2000000) / 512);
                     writePacket.body(commandInfo);
                     writePacket.Send(IoPort);
                 }
-                IoPort.Write(fileArray, l, 32768);
-                if (l % 524288 == 0)
+
+                IoPort.Write(fileArray, l, 0x8000); //32768 (256KB)
+
+                if (l % 0x80000 == 0) //524288 (512KB)
                 {
-                    Console.WriteLine("sent: " + l);
+                    Console.WriteLine("sent 512KB chunk: {0} of {1}", l, fileArray.Length);
                 }
             }
-            Console.WriteLine("sent: " + fileArray.Length);
-            Console.WriteLine("time: " + (DateTime.Now - now).Ticks / 10000L);
+            Console.WriteLine("sent file: {0}", fileArray.Length);
+            Console.WriteLine("elapsed time: {0}", (DateTime.Now - now).Ticks / 10000L);
 
-            ushort crc = 0;
-            foreach (byte b in fileArray)
-            {
-                crc += (ushort)b;
-            }
-            Console.WriteLine("crc: " + crc);
+            //ushort crc = 0;
+            //foreach (byte b in fileArray)
+            //{
+            //    crc += (ushort)b;
+            //}
+            //Console.WriteLine("crc: " + crc);
         }
 
         private static void ReadResponse(Stream stream, int length)
