@@ -7,6 +7,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Threading;
+using System.Reflection;
+using System.Windows;
 
 namespace N64LoaderConsole
 {
@@ -18,18 +20,18 @@ namespace N64LoaderConsole
 
         private static void Main(string[] args)
         {
-            Console.WriteLine("**********************************");
-            Console.WriteLine("EverDrive64 USB ROM Loader V1.0");
-            Console.WriteLine("**********************************");
+            Console.WriteLine("****************************************");
+            Console.WriteLine("EverDrive64 USB ROM Loader V{0}", Assembly.GetExecutingAssembly().GetName().Version.ToString());
+            Console.WriteLine("****************************************");
             if (args.Length != 0 && !string.IsNullOrEmpty(args[0]))
             {
                 if (InitialiseSerialPort())
                 {
-                    Console.WriteLine("Writing ROM...");
+                    Console.WriteLine("Preparing ROM for flash cart...");
                     //todo: detect file type is correct, if not convert
                     WriteRom(args[0].ToString());
 
-                    Thread.Sleep(1000); //TODO: testing to see if the rom image is not ready, remove if possible!
+                    Console.WriteLine("Booting ROM on flash cart...");
                     var startPacket = new CommandPacket(CommandPacket.Command.StartRom, 508);
                     startPacket.Send(IoPort);                    
                 }
@@ -117,7 +119,7 @@ namespace N64LoaderConsole
 
             if (fileLength < 0x200000) //2097152 //needs filling
             {
-                Console.WriteLine("Generating space for ROM");
+                Console.WriteLine("Generating space for ROM on flash cart");
                 var fillPacket = new CommandPacket(CommandPacket.Command.Fill, 508);
                 fillPacket.Send(IoPort);
 
@@ -146,7 +148,7 @@ namespace N64LoaderConsole
             writePacket.body(commandInfo);
             writePacket.Send(IoPort);
 
-            Console.WriteLine("Sending ROM...");
+            Console.WriteLine("Sending ROM to flash cart...");
             DateTime now = DateTime.Now;
             for (int l = 0; l < fileArray.Length; l += 0x8000) //32768 (256KB)
             {
@@ -161,16 +163,20 @@ namespace N64LoaderConsole
                     writePacket.body(commandInfo);
                     writePacket.Send(IoPort);
                 }
-
-                IoPort.Write(fileArray, l, 0x8000); //32768 (256KB)
+                //TEST code
+                byte[] test = new byte[0x8000];
+                Array.Copy(fileArray, l, test, 0, 0x8000);
+                // TEST code
+                IoPort.Write(test, 0, test.Length);
+                //IoPort.Write(fileArray, l, 0x8000); //32768 (256KB)
 
                 if (l % 0x80000 == 0) //524288 (512KB)
                 {
-                    Console.WriteLine("sent 512KB chunk: {0} of {1}", l, fileArray.Length);
+                    Console.WriteLine("Sent 512KB chunk: {0} to {1} of {2}", l, l + 0x80000, fileArray.Length);
                 }
             }
-            Console.WriteLine("sent file: {0}", fileArray.Length);
-            Console.WriteLine("elapsed time: {0}", (DateTime.Now - now).Ticks / 10000L);
+            Console.WriteLine("File sent.");
+            Console.WriteLine("elapsed time: {0}ms", (DateTime.Now - now).TotalMilliseconds);
 
             //ushort crc = 0;
             //foreach (byte b in fileArray)
