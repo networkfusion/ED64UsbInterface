@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "N64LoaderConsole", "N64Load
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ED64RomLoader", "ED64RomLoader\ED64RomLoader.csproj", "{2F2B88F6-B7A3-49AF-B6E8-05CB08DCA92A}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RomConverter", "RomConverter\RomConverter.csproj", "{561AA2B1-AED0-46C1-8BDE-BDFD6B0CA852}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{2F2B88F6-B7A3-49AF-B6E8-05CB08DCA92A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2F2B88F6-B7A3-49AF-B6E8-05CB08DCA92A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{2F2B88F6-B7A3-49AF-B6E8-05CB08DCA92A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{561AA2B1-AED0-46C1-8BDE-BDFD6B0CA852}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{561AA2B1-AED0-46C1-8BDE-BDFD6B0CA852}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{561AA2B1-AED0-46C1-8BDE-BDFD6B0CA852}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{561AA2B1-AED0-46C1-8BDE-BDFD6B0CA852}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
