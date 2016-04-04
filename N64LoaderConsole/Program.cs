@@ -12,66 +12,53 @@ namespace N64LoaderConsole
 {
     internal class Program
     {
-        private static SerialPortStream port = new SerialPortStream();
-        private static bool connected = false;
+        private static SerialPortStream IoPort = new SerialPortStream();
         private static byte[] sendBuffer = new byte[512];
         private static byte[] receiveBuffer = new byte[512];
 
         private static void Main(string[] args)
         {
-            //var Device = new FindDevice();
-            //var ports = Device.FindFdtiUsbDevices();
-
             Console.WriteLine("**********************************");
-            Console.WriteLine("ED64 USB ROM Loader V1.0");
+            Console.WriteLine("EverDrive64 USB ROM Loader V1.0");
             Console.WriteLine("**********************************");
+            if (args.Length != 0 && !string.IsNullOrEmpty(args[0]))
+            {
+                var connected = InitialiseSerialPort();
 
-            InitialiseSerialPort();
-
-            try
-            {
-                if (connected == false && port != null && port.IsOpen)
+                if (connected)
                 {
-                    port.Close();
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("error: " + ex.ToString());
-                Console.ReadLine();
-            }
-            if (connected == false)
-            {
-                Console.WriteLine("ED64's usb port not detected");
-                return;
-            }
-            if (args.Length != 0)
-            {
-                if (!string.IsNullOrEmpty(args[0]))
-                {
-                    Console.WriteLine("No ROM specified, exiting");
+                    Console.WriteLine("Writing ROM...");
+                    //todo: detect file type is correct, if not convert
                     WriteRom(args[0]);
 
 
                     var startPacket = new CommandPacket(CommandPacket.Command.StartRom, 508);
-                    startPacket.Send(port);
+                    startPacket.Send(IoPort);
+
+                    IoPort.Close();
                 }
+                else
+                {
+                    Console.WriteLine("ED64's usb port not detected");
+                }
+
             }
             else
             {
-                Console.WriteLine("No ROM specified, exiting.");
-                Console.ReadLine();
+                //todo: try reading a rom...
+                Console.WriteLine(@"No ROM specified, e.g. ""loader.exe c:\mycart.v64"".");
             }
 
-            port.Close();
+            Console.WriteLine(@"Press any key to exit.");
+            Console.ReadLine();
         }
 
-        private static void InitialiseSerialPort()
+        private static bool InitialiseSerialPort()
         {            
             Console.WriteLine("Waiting for Everdrive64 USB to be connected");
             while (FindDevice.FindFdtiUsbDevices().Where(p => p.nodeDescription == "FT245R USB FIFO").Count() == 0)
             {
-                Thread.Sleep(500);
+                Thread.Sleep(100);
             }
 
             var testPacket = new CommandPacket(CommandPacket.Command.TestConnection, 508);
@@ -79,23 +66,25 @@ namespace N64LoaderConsole
             {
                 try
                 {
-                    port = new SerialPortStream(device.nodeComportName);
-                    port.WriteTimeout = 500;
-                    port.ReadTimeout = 500;
-                    port.Open();
-                    testPacket.Send(port);
+                    IoPort = new SerialPortStream(device.nodeComportName);
+                    IoPort.WriteTimeout = 500;
+                    IoPort.ReadTimeout = 500;
+                    IoPort.Open();
+                    testPacket.Send(IoPort);
 
-                    port.Read(receiveBuffer, 0 , 512); //should be 4 if not 512
+                    IoPort.Read(receiveBuffer, 0 , 512); //should be 4 if not 512
                     //ReadResponse(port, 4); //expect RSPk
 
                     if (receiveBuffer[3] != 107) //k
                     {
-                        port.Close();
-                        throw new Exception("no response form " + device.nodeDescription);
+                        IoPort.Close();
+                        //throw new Exception("no response form " + device.nodeDescription);
                     }
-                    Console.WriteLine("Connected to EverDrive64 on port: " + device.nodeComportName);
-                    connected = true;
-                    break;
+                    else
+                    {
+                        Console.WriteLine("Connected to EverDrive64 on port: " + device.nodeComportName);
+                        return true;
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -103,36 +92,43 @@ namespace N64LoaderConsole
                     Console.ReadLine();
                 }
             }
+            return false;
         }
 
         public static void WriteRom(string fileName)
         {
-            FileStream fileStream = File.OpenRead(fileName); //TODO: should be enclosed in a using statement
-            int fileLength = (int)fileStream.Length;
-            if ((long)(fileLength / 65536 * 65536) != fileStream.Length)
+            int fileLength;
+            byte[] fileArray;
+
+            using (FileStream fileStream = File.OpenRead(fileName))
             {
-                fileLength = (int)(fileStream.Length / 65536L * 65536L + 65536L);
+                fileLength = (int)fileStream.Length;
+                if ((long)(fileLength / 65536 * 65536) != fileStream.Length)
+                {
+                    fileLength = (int)(fileStream.Length / 65536L * 65536L + 65536L);
+                }
+                fileArray = new byte[fileLength];
+                fileStream.Read(fileArray, 0, (int)fileStream.Length);
             }
-            byte[] fileArray = new byte[fileLength];
-            fileStream.Read(fileArray, 0, (int)fileStream.Length);
-            fileStream.Close();
-            Console.WriteLine("len: " + fileLength);
+            Console.WriteLine("File Size: " + fileLength);
 
             if (fileLength < 2097152) //0x200000 //needs filling
             {
                 var fillPacket = new CommandPacket(CommandPacket.Command.Fill, 508);
-                fillPacket.Send(port);
+                fillPacket.Send(IoPort);
 
 
-                port.Read(receiveBuffer, 0, 512);
+                IoPort.Read(receiveBuffer, 0, 512);
 
                 if (receiveBuffer[3] != 107)
                 {
                     Console.WriteLine("fill error");
-                    port.Close();
                     return;
                 }
-                Console.WriteLine("fill ok");
+                else
+                {
+                    Console.WriteLine("fill ok");
+                }
             }
 
             var writePacket = new CommandPacket(CommandPacket.Command.WriteRom, 508); //4 if not 508
@@ -144,7 +140,7 @@ namespace N64LoaderConsole
             commandInfo[3] = (byte)(fileArray.Length / 512);
 
             writePacket.body(commandInfo);
-            writePacket.Send(port);
+            writePacket.Send(IoPort);
 
             Console.WriteLine("sending...");
             DateTime now = DateTime.Now;
@@ -159,9 +155,9 @@ namespace N64LoaderConsole
                     commandInfo[2] = (byte)((fileArray.Length - 33554432) / 512 >> 8);
                     commandInfo[3] = (byte)((fileArray.Length - 33554432) / 512);
                     writePacket.body(commandInfo);
-                    writePacket.Send(port);
+                    writePacket.Send(IoPort);
                 }
-                port.Write(fileArray, l, 32768);
+                IoPort.Write(fileArray, l, 32768);
                 if (l % 524288 == 0)
                 {
                     Console.WriteLine("sent: " + l);
@@ -169,10 +165,11 @@ namespace N64LoaderConsole
             }
             Console.WriteLine("sent: " + fileArray.Length);
             Console.WriteLine("time: " + (DateTime.Now - now).Ticks / 10000L);
+
             ushort crc = 0;
-            for (int m = 0; m < fileArray.Length; m++)
+            foreach (byte b in fileArray)
             {
-                crc += (ushort)fileArray[m];
+                crc += (ushort)b;
             }
             Console.WriteLine("crc: " + crc);
         }
