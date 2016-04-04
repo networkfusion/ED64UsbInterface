@@ -9,11 +9,18 @@ using System.Threading.Tasks;
 using System.Threading;
 using System.Reflection;
 using System.Windows;
+using RomConverter;
 
 namespace N64LoaderConsole
 {
     internal class Program
     {
+        const int CHUNK_32KB = 0x8000; //32768
+        const int CHUNK_64KB = 0x10000; //65536
+        const int CHUNK_512KB = 0x80000; //524288
+        const int CHUNK_2MB = 0x200000;//2097152
+        const int CHUNK_32MB = 0x2000000; //33554432
+
         private static SerialPortStream IoPort = new SerialPortStream();
         private static byte[] sendBuffer = new byte[512];
         private static byte[] receiveBuffer = new byte[512];
@@ -28,12 +35,22 @@ namespace N64LoaderConsole
                 if (InitialiseSerialPort())
                 {
                     Console.WriteLine("Preparing ROM for flash cart...");
-                    //todo: detect file type is correct, if not convert
-                    WriteRom(args[0].ToString());
+                    //TODO: detect file type is correct, if not convert
 
-                    Console.WriteLine("Booting ROM on flash cart...");
-                    var startPacket = new CommandPacket(CommandPacket.Command.StartRom, 508);
-                    startPacket.Send(IoPort);                    
+                    var file = RomConverter.RomConverter.ConvertFile(args[0].ToString(), RomConverter.RomConverter.RomType.v64);
+
+                    if (!string.IsNullOrEmpty(file))
+                    {
+                        WriteRom(file);
+
+                        Console.WriteLine("Booting ROM on flash cart...");
+                        var startPacket = new CommandPacket(CommandPacket.Command.StartRom);
+                        startPacket.Send(IoPort);
+                    }   
+                    else
+                    {
+                        Console.WriteLine("File conversion failed");
+                    }             
                 }
                 else
                 {
@@ -43,7 +60,7 @@ namespace N64LoaderConsole
             }
             else
             {
-                //todo: try reading a rom...
+                //TODO: try reading a rom...
                 Console.WriteLine(@"No ROM specified, e.g. ""loader.exe c:\mycart.v64"".");
             }
 
@@ -72,7 +89,7 @@ namespace N64LoaderConsole
                 Thread.Sleep(100);
             }
 
-            var testPacket = new CommandPacket(CommandPacket.Command.TestConnection, 508);
+            var testPacket = new CommandPacket(CommandPacket.Command.TestConnection);
             foreach (var device in FindDevice.FindFdtiUsbDevices().Where(p => p.nodeDescription == "FT245R USB FIFO"))
             {
                 try
@@ -108,19 +125,19 @@ namespace N64LoaderConsole
             using (FileStream fileStream = File.OpenRead(fileName))
             {
                 fileLength = (int)fileStream.Length;
-                if ((long)(fileLength / 0x10000 * 0x10000) != fileStream.Length) //65536
+                if ((long)(fileLength / CHUNK_64KB * CHUNK_64KB) != fileStream.Length) //65536
                 {
-                    fileLength = (int)(fileStream.Length / 0x10000 * 0x10000 + 0x10000);
+                    fileLength = (int)(fileStream.Length / CHUNK_64KB * CHUNK_64KB + CHUNK_64KB);
                 }
                 fileArray = new byte[fileLength];
                 fileStream.Read(fileArray, 0, (int)fileStream.Length);
             }
             Console.WriteLine("File Size: " + fileLength);
 
-            if (fileLength < 0x200000) //2097152 //needs filling
+            if (fileLength < CHUNK_2MB) //needs filling
             {
-                Console.WriteLine("Generating space for ROM on flash cart");
-                var fillPacket = new CommandPacket(CommandPacket.Command.Fill, 508);
+                Console.WriteLine("Preparing space (zero fill) for ROM on flash cart");
+                var fillPacket = new CommandPacket(CommandPacket.Command.Fill);
                 fillPacket.Send(IoPort);
 
 
@@ -128,16 +145,17 @@ namespace N64LoaderConsole
 
                 if (receiveBuffer[3] != 107)
                 {
-                    Console.WriteLine("Error generating space required, exiting");
+                    Console.WriteLine("Zero fill failed, exiting");
+                    fileArray = null;
                     return;
                 }
                 else
                 {
-                    Console.WriteLine("ROM space generated");
+                    Console.WriteLine("Zero fill succeeded");
                 }
             }
 
-            var writePacket = new CommandPacket(CommandPacket.Command.WriteRom, 508); //4 if not 508
+            var writePacket = new CommandPacket(CommandPacket.Command.WriteRom);
 
             var commandInfo = new byte[4];
             commandInfo[0] = 0; //offset
@@ -150,40 +168,35 @@ namespace N64LoaderConsole
 
             Console.WriteLine("Sending ROM to flash cart...");
             DateTime now = DateTime.Now;
-            for (int l = 0; l < fileArray.Length; l += 0x8000) //32768 (256KB)
+            for (int l = 0; l < fileArray.Length; l += CHUNK_32KB)
             {
-                if (l == 0x2000000) // 33554432 (32MB)
+                if (l == CHUNK_32MB)
                 {
                     Console.WriteLine("Sending next 32MB chunk");
 
-                    commandInfo[0] = 0x40; //64 - 32MB offset
+                    commandInfo[0] = 0x40; //64 (offset 32MB)
                     commandInfo[1] = 0;
-                    commandInfo[2] = (byte)((fileArray.Length - 0x2000000) / 512 >> 8);
-                    commandInfo[3] = (byte)((fileArray.Length - 0x2000000) / 512);
+                    commandInfo[2] = (byte)((fileArray.Length - CHUNK_32MB) / 512 >> 8);
+                    commandInfo[3] = (byte)((fileArray.Length - CHUNK_32MB) / 512);
                     writePacket.body(commandInfo);
                     writePacket.Send(IoPort);
                 }
+                //TODO: why does the test code work but the real code not?
                 //TEST code
-                byte[] test = new byte[0x8000];
-                Array.Copy(fileArray, l, test, 0, 0x8000);
-                // TEST code
+                byte[] test = new byte[CHUNK_32KB];
+                Array.Copy(fileArray, l, test, 0, CHUNK_32KB);
                 IoPort.Write(test, 0, test.Length);
-                //IoPort.Write(fileArray, l, 0x8000); //32768 (256KB)
+                // TEST code
+                //IoPort.Write(fileArray, l, CHUNK_32KB);
 
-                if (l % 0x80000 == 0) //524288 (512KB)
+                if (l % CHUNK_512KB == 0)
                 {
-                    Console.WriteLine("Sent 512KB chunk: {0} to {1} of {2}", l, l + 0x80000, fileArray.Length);
+                    Console.WriteLine("Sent 512KB chunk: {0} to {1} of {2}", l, l + CHUNK_512KB, fileArray.Length);
                 }
             }
             Console.WriteLine("File sent.");
-            Console.WriteLine("elapsed time: {0}ms", (DateTime.Now - now).TotalMilliseconds);
-
-            //ushort crc = 0;
-            //foreach (byte b in fileArray)
-            //{
-            //    crc += (ushort)b;
-            //}
-            //Console.WriteLine("crc: " + crc);
+            Console.WriteLine("Elapsed time: {0}ms", (DateTime.Now - now).TotalMilliseconds);
+            fileArray = null;
         }
 
         private static void ReadResponse(Stream stream, int length)

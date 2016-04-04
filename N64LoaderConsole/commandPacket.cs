@@ -9,6 +9,7 @@ namespace N64LoaderConsole
 {
     internal class CommandPacket
     {
+        const int PACKET_SIZE = 512;
         public byte[] Packet { get; private set; }
 
         public enum Command : byte
@@ -21,9 +22,9 @@ namespace N64LoaderConsole
 
         }
 
-        public CommandPacket(Command command, int bodySize = 0)
+        public CommandPacket(Command command)
         {
-            Packet = new byte[bodySize + 4];
+            Packet = new byte[PACKET_SIZE];
             Packet[0] = (byte)'C';
             Packet[1] = (byte)'M';
             Packet[2] = (byte)'D';

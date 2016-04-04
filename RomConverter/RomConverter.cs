@@ -12,24 +12,26 @@ using System.Threading.Tasks;
 
 namespace RomConverter
 {
-    public class RomConverter
+    public static class RomConverter
     {
         public enum RomType : uint
         {
-            n64 = 0x40123780,
-            v64 = 0x37804012,
-            z64 = 0x80371240
+            n64 = 0x40123780, //1074935680
+            v64 = 0x37804012, //931151890
+            z64 = 0x80371240 //2151092800
         }
 
-        public async Task ConvertFile(string InFilePath, RomType OutFileType)
+        public static string ConvertFile(string InFilePath, RomType OutFileType)
         {
-            await ConvertFile(InFilePath, new FileInfo(InFilePath).DirectoryName, OutFileType);
+           return ConvertFile(InFilePath, new FileInfo(InFilePath).DirectoryName, OutFileType);
         }
 
-        public async Task ConvertFile(string InFilePath, string OutDirPath, RomType OutFileType)
+        public static string ConvertFile(string InFilePath, string OutDirPath, RomType OutFileType)
         {
             Debug.WriteLine("Converting n64 Roms from [n64,v64,z64] to [n64,v64,z64]");
             try {
+                var OutFileName = OutDirPath + "\\" + Path.GetFileNameWithoutExtension(new FileInfo(InFilePath).ToString()) + "." + OutFileType.ToString();
+
                 //Just be sure we don't try to read a huge file into memory. (Max File size is 128MB)
                 if (new FileInfo(InFilePath).Length > 134217728)
                 {
@@ -37,9 +39,10 @@ namespace RomConverter
                 }
                 else
                 {
+
                     using (FileStream infs = File.OpenRead(InFilePath))
                     {
-                        var OutFileName = OutDirPath + new FileInfo(InFilePath).Name + OutFileType.ToString();
+                        
 
                         if (File.Exists(OutFileName))
                         {
@@ -50,17 +53,19 @@ namespace RomConverter
                         {
                             //Read input File;
                             byte[] inBuffer = new byte[(int)infs.Length];
-                            await infs.ReadAsync(inBuffer, 0, (int)infs.Length);
+                            infs.Read(inBuffer, 0, (int)infs.Length);
 
                             //get file header type
                             infs.Seek(0, SeekOrigin.Begin);
 
                             RomType romHeader = 0;
-                            using (BinaryReader reader = new System.IO.BinaryReader(infs))
+                            byte[] headerArray = new byte[4];
+                            infs.Read(headerArray, 0, 4);
+                            if (BitConverter.IsLittleEndian)
                             {
-                                romHeader = (RomType)reader.ReadUInt32();
+                                Array.Reverse(headerArray);
                             }
-
+                            romHeader = (RomType)Enum.ToObject(typeof(RomType), BitConverter.ToUInt32(headerArray, 0));
 
                             infs.Seek(0, SeekOrigin.Begin);
 
@@ -124,16 +129,18 @@ namespace RomConverter
                             }
 
 
-                            await outfs.WriteAsync(inBuffer, 0, inBuffer.Length);
+                            outfs.Write(inBuffer, 0, inBuffer.Length);
 
                         }
                     }
                 }
 
                 Debug.WriteLine("finished conversion");
+                return OutFileName;
             } catch (Exception e) {
                 Debug.WriteLine(e);
             }
+            return "";
         }
 
 
@@ -168,12 +175,12 @@ namespace RomConverter
 
 
         //We should try the following methods for faster processing:
-        public ushort SwapBytes(ushort x)
+        public static ushort SwapBytes(ushort x)
         {
             return (ushort)((ushort)((x & 0xff) << 8) | ((x >> 8) & 0xff));
         }
 
-        public uint SwapBytes(uint x)
+        public static uint SwapBytes(uint x)
         {
             return ((x & 0x000000ff) << 24) +
                    ((x & 0x0000ff00) << 8) +
