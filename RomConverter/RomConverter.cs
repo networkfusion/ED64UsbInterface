@@ -16,9 +16,9 @@ namespace RomConverter
     {
         public enum RomType : uint
         {
-            n64 = 0x40123780, //1074935680
-            v64 = 0x37804012, //931151890
-            z64 = 0x80371240 //2151092800
+            z64 = 0x40123780, //1074935680
+            n64 = 0x37804012, //931151890
+            v64 = 0x80371240 //2151092800
         }
 
         public static string ConvertFile(string InFilePath, RomType OutFileType)
