@@ -19,6 +19,7 @@ namespace N64LoaderConsole
             StartRom = 83, //char 'S'
             TestConnection = 84, //char 'T'
             WriteRom = 87, // char 'W'
+            Picture = 80, //char 'P'
 
         }
 

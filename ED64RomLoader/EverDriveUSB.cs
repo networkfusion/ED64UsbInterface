@@ -115,7 +115,7 @@ namespace N64LoaderConsole
         {
             //TO DO: Insert your disconnection code here
             await Connection.Disconnect();
-            Console.Out.WriteLine("Disconnected from elink");
+            Console.Out.WriteLine("Disconnected from ED64");
         }
         #endregion
 

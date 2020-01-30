@@ -37,7 +37,8 @@ namespace N64LoaderConsole
                     Console.WriteLine("Preparing ROM for flash cart...");
                     //TODO: detect file type is correct, if not convert
 
-                    var file = RomConverter.RomConverter.ConvertFile(args[0].ToString(), RomConverter.RomConverter.RomType.v64);
+                    //var file = RomConverter.RomConverter.ConvertFile(args[0].ToString(), RomConverter.RomConverter.RomType.v64);
+                    var file = args[0].ToString();
 
                     if (!string.IsNullOrEmpty(file))
                     {
@@ -60,8 +61,24 @@ namespace N64LoaderConsole
             }
             else
             {
-                //TODO: try reading a rom...
-                Console.WriteLine(@"No ROM specified, e.g. ""loader.exe c:\mycart.v64"".");
+                Console.WriteLine(@"Menu:");
+                Console.WriteLine(@"1) Take a screenshot:");
+                var key = Console.ReadKey();
+
+                if (key.KeyChar == '1')
+                {
+                    if (InitialiseSerialPort())
+                    {
+                        Screenshot.TakeScreenshot(ref IoPort, "test.bmp");
+                    }
+                    else
+                    {
+                        Console.WriteLine("Invalid Input... Exiting.");
+                    }
+                    Console.WriteLine(@"No ROM specified, e.g. ""loader.exe c:\mycart.v64"".");
+                    //TODO: try reading a rom...
+                    //Console.WriteLine(@"No ROM specified, e.g. ""loader.exe c:\mycart.v64"".");
+                }
             }
 
             if (IoPort.IsOpen)

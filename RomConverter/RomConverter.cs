@@ -32,6 +32,11 @@ namespace RomConverter
             try {
                 var OutFileName = OutDirPath + "\\" + Path.GetFileNameWithoutExtension(new FileInfo(InFilePath).ToString()) + "." + OutFileType.ToString();
 
+                if (InFilePath == OutFileName)
+                {
+                    return InFilePath;
+                }
+
                 //Just be sure we don't try to read a huge file into memory. (Max File size is 128MB)
                 if (new FileInfo(InFilePath).Length > 134217728)
                 {
@@ -46,7 +51,7 @@ namespace RomConverter
 
                         if (File.Exists(OutFileName))
                         {
-                            Debug.WriteLine("Overwriting File" + OutFileName);
+                            Debug.WriteLine("Overwriting File " + OutFileName);
                         }
 
                         using (FileStream outfs = File.Create(OutFileName))
