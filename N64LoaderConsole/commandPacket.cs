@@ -20,7 +20,7 @@ namespace N64LoaderConsole
             TestConnection = 84, //char 'T'
             WriteRom = 87, // char 'W'
             Picture = 80, //char 'P'
-
+            ScreenResolution = 82, //char 'R'
         }
 
         public CommandPacket(Command command)

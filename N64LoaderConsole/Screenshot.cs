@@ -12,16 +12,26 @@ namespace N64LoaderConsole
     {
         public static void TakeScreenshot(SerialPortStream IoPort, string filename)
         {
+            //TODO: Is there a better way to pole the ED64 for its current resolution and go from there!
+            var resPacket = new CommandPacket(CommandPacket.Command.ScreenResolution);
+            resPacket.Send(IoPort);
+
+            var resReceiveBuffer = new byte[512];
+
+            IoPort.Read(resReceiveBuffer, 0, 512);
+
+            var width = BitConverter.ToUInt16(resReceiveBuffer, 0);
+            var height = BitConverter.ToUInt16(resReceiveBuffer, 2);
+
+
+
             var picturePacket = new CommandPacket(CommandPacket.Command.Picture);
             picturePacket.Send(IoPort);
 
-            //TODO: Should really pole the ED64 for its current resolution and go from there!
-            var width = 640;
-            var height = 480;
 
             var dataSize = width * height * 2; //Colour Data(2 bytes)
-            //var imageSize = width * height * 3; //Colour Data(3 bytes) //921600
-            var receiveBuffer = new List<byte>();//[dataSize]; //614400 (1200 * 512) 0x96000 
+            var imageSize = width * height * 3; //Colour Data(3 bytes)
+            var receiveBuffer = new List<byte>();
 
             int bytesRead = 0;
 
@@ -37,13 +47,12 @@ namespace N64LoaderConsole
                     receiveBuffer.AddRange(tempBuffer);
                 }
                 bytesRead += tempRead;
-                //Console.WriteLine($"received {tempRead} chunk");
                 i++;
             }
 
             Console.WriteLine($" Read Bytes: {bytesRead}");
 
-            var header = new byte[54] { 
+            var bmpHeader = new byte[54] { 
                 0x42, 0x4D, //(BM)
                 0x36, 0x10, 0x0E, 0x00, //(File size)
                 0x00, 0x00, //(reserved)
@@ -64,21 +73,34 @@ namespace N64LoaderConsole
                 0x00, 0x00, 0x00, 0x00 //(number of important colours)
             };
 
-            //width = 280
-            //bmphead[0x12] = width & 0xff
-            //bmphead[0x13] = width >> 8
-            //bmphead[0x14] = 0
-            //bmphead[0x15] = 0
+            //filesize = imagesize + 54 //generally it is not used, but we will set it just incase!
+            var filesize = imageSize + 54;
+            bmpHeader[2] = (byte)(filesize & 0xff);
+            bmpHeader[3] = (byte)(filesize >> 8);
+            bmpHeader[4] = 0;
+            bmpHeader[5] = 0;
 
-            //# -256 for "top-down" bitmap
-            //height = 256;
-            //header[0x16] = 0x00;
-            //header[0x17] = 0xFF;
-            //header[0x18] = 0xFF;
-            //header[0x19] = 0xFF;
+            //image width
+            bmpHeader[18] = (byte)(width & 0xff);
+            bmpHeader[19] = (byte)(width >> 8);
+            bmpHeader[20] = 0;
+            bmpHeader[21] = 0;
+
+            //negitive height for "top-down" bitmap
+            var topdownHeight = height * -1;
+            bmpHeader[22] = (byte)(topdownHeight & 0xff);
+            bmpHeader[23] = (byte)(topdownHeight >> 8);
+            bmpHeader[24] = 0xff;
+            bmpHeader[25] = 0xff;
+
+            //imagesize //generally it is not used, but we will set it just incase!
+            bmpHeader[34] = (byte)(imageSize & 0xff);
+            bmpHeader[35] = (byte)(imageSize >> 8);
+            bmpHeader[36] = 0;
+            bmpHeader[37] = 0;
 
             var imageData = new List<byte>();
-            imageData.AddRange(header);
+            imageData.AddRange(bmpHeader);
 
             using (BinaryReader stream = new BinaryReader(new MemoryStream(receiveBuffer.ToArray())))
             {
