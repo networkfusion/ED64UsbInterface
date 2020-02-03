@@ -75,7 +75,7 @@ namespace N64LoaderConsole
                         switch (key.KeyChar)
                         {
                             case '1':
-                                Screenshot.TakeScreenshot(IoPort, "test.bmp");
+                                Screenshot.TakeScreenshot(IoPort, $"screenshot-{DateTime.Now.ToString()}.bmp");
                                 break;
                             case '2':
                                 Console.WriteLine("Enter full path to ROM:");
