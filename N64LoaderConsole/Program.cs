@@ -28,7 +28,7 @@ namespace N64LoaderConsole
         private static void Main(string[] args)
         {
             Console.WriteLine("****************************************");
-            Console.WriteLine("EverDrive64 USB ROM Loader V{0}", Assembly.GetExecutingAssembly().GetName().Version.ToString());
+            Console.WriteLine("EverDrive64 USB Tools V{0}", Assembly.GetExecutingAssembly().GetName().Version.ToString());
             Console.WriteLine("****************************************");
             if (args.Length != 0 && !string.IsNullOrEmpty(args[0]))
             {
@@ -47,11 +47,11 @@ namespace N64LoaderConsole
                         Console.WriteLine("Booting ROM on flash cart...");
                         var startPacket = new CommandPacket(CommandPacket.Command.StartRom);
                         startPacket.Send(IoPort);
-                    }   
+                    }
                     else
                     {
                         Console.WriteLine("File conversion failed");
-                    }             
+                    }
                 }
                 else
                 {
@@ -61,24 +61,44 @@ namespace N64LoaderConsole
             }
             else
             {
-                Console.WriteLine(@"Menu:");
-                Console.WriteLine(@"1) Take a screenshot:");
-                var key = Console.ReadKey();
-
-                if (key.KeyChar == '1')
+                if (InitialiseSerialPort())
                 {
-                    if (InitialiseSerialPort())
+                    Console.WriteLine(@"Menu:");
+                    Console.WriteLine(@"1) Take a screenshot.");
+                    Console.WriteLine(@"2) Copy ROM to ED64 and Start ROM");
+                    Console.WriteLine(@"'E') Exit");
+                    Console.WriteLine(@"'?') Help");
+                    var exit = false;
+                    while (!exit)
                     {
-                        Screenshot.TakeScreenshot(ref IoPort, "test.bmp");
+                        var key = Console.ReadKey();
+                        switch (key.KeyChar)
+                        {
+                            case '1':
+                                Screenshot.TakeScreenshot(IoPort, "test.bmp");
+                                break;
+                            case '2':
+                                Console.WriteLine("Enter full path to ROM:");
+                                var file = Console.ReadLine();
+                                WriteRom(file);
+                                Console.WriteLine("Booting ROM on flash cart...");
+                                var startPacket = new CommandPacket(CommandPacket.Command.StartRom);
+                                startPacket.Send(IoPort);
+                                break;
+                            case 'E':
+                                exit = true;
+                                break;
+                            case '?':
+                                Console.WriteLine(@"Send and start a ROM through the commandline e.g. ""loader.exe c:\mycart.v64"".");
+                                break;
+                            default:
+                                Console.WriteLine("Invalid Input...");
+                                break;
+                        }
                     }
-                    else
-                    {
-                        Console.WriteLine("Invalid Input... Exiting.");
-                    }
-                    Console.WriteLine(@"No ROM specified, e.g. ""loader.exe c:\mycart.v64"".");
-                    //TODO: try reading a rom...
-                    //Console.WriteLine(@"No ROM specified, e.g. ""loader.exe c:\mycart.v64"".");
+
                 }
+            
             }
 
             if (IoPort.IsOpen)

@@ -10,7 +10,7 @@ namespace N64LoaderConsole
 {
     public static class Screenshot
     {
-        public static void TakeScreenshot(ref SerialPortStream IoPort, string filename)
+        public static void TakeScreenshot(SerialPortStream IoPort, string filename)
         {
             var picturePacket = new CommandPacket(CommandPacket.Command.Picture);
             picturePacket.Send(IoPort);
@@ -20,10 +20,28 @@ namespace N64LoaderConsole
             var height = 480;
 
             var dataSize = width * height * 2; //Colour Data(2 bytes)
-            var imageSize = width * height * 3; //Colour Data(3 bytes) //921600
-            var receiveBuffer = new byte[dataSize]; //614400 (1200 * 512) 0x96000
+            //var imageSize = width * height * 3; //Colour Data(3 bytes) //921600
+            var receiveBuffer = new List<byte>();//[dataSize]; //614400 (1200 * 512) 0x96000 
 
-            IoPort.Read(receiveBuffer, 0, dataSize);
+            int bytesRead = 0;
+
+            int i = 0;
+            while (i < (dataSize))
+            {
+                //I think we should be using a memory stream?
+                //currently doing it one by one, otherwise we miss stuff!
+                var tempBuffer = new byte[1];
+                var tempRead = IoPort.Read(tempBuffer, 0, 1);
+                if (tempRead == 1)
+                {
+                    receiveBuffer.AddRange(tempBuffer);
+                }
+                bytesRead += tempRead;
+                //Console.WriteLine($"received {tempRead} chunk");
+                i++;
+            }
+
+            Console.WriteLine($" Read Bytes: {bytesRead}");
 
             var header = new byte[54] { 
                 0x42, 0x4D, //(BM)
@@ -33,8 +51,9 @@ namespace N64LoaderConsole
                 0x36, 0x00, 0x00, 0x00, //(offset = header size + info header size 54 bytes)
                 //BITMAPINFOHEADER
                 0x28, 0x00, 0x00, 0x00, //(Length = 40 bytes)
-                0x80, 0x02, 0x00, 0x00, //(Bitmap width signed int = 640) 264
-                0xE0, 0x01, 0x00, 0x00, //(Bitmap height signed int = 480) 240
+                0x80, 0x02, 0x00, 0x00, //(Bitmap width signed int = 640)
+                //0xE0, 0x01, 0x00, 0x00, //(Bitmap height signed int = 480)
+                0x20, 0xFE, 0xFF, 0xFF, //(Bitmap height signed int = -480 for "topdown")
                 0x01, 0x00, //(number of colour planes MUST BE 1)
                 0x18, 0x00, //(number of bits per pixel = 24)
                 0x00, 0x00, 0x00, 0x00, //(compression)
@@ -52,51 +71,41 @@ namespace N64LoaderConsole
             //bmphead[0x15] = 0
 
             //# -256 for "top-down" bitmap
-            //height = 256
-            //bmphead[0x16] = 0x00
-            //bmphead[0x17] = 0xFF
-            //bmphead[0x18] = 0xFF
-            //bmphead[0x19] = 0xFF
+            //height = 256;
+            //header[0x16] = 0x00;
+            //header[0x17] = 0xFF;
+            //header[0x18] = 0xFF;
+            //header[0x19] = 0xFF;
 
-            //input = open('framebuffer.bin', 'rb')
-            //output = open('screenshot.bmp', 'wb')
-            //bin_array = array('B')
-
-            //try:
-            //    output.write(bmphead)
             var imageData = new List<byte>();
             imageData.AddRange(header);
-            var colour = new byte[2];
 
-            for (int h = 0; h < height; h++)
+            using (BinaryReader stream = new BinaryReader(new MemoryStream(receiveBuffer.ToArray())))
             {
-                for (int w = 0; w < width; w++)
+
+                for (int h = 0; h < height; h++)
                 {
-                    //colour = input.read(2)
+                    for (int w = 0; w < width; w++)
+                    {
+                        var colour = stream.ReadBytes(2);
 
-                    int red = (colour[0] & 0xf8);
-                    int green = ((colour[0] & 0x07) << 5) | ((colour[1] & 0xc0) >> 3);
-                    int blue = (colour[1] & 0x3e) << 2;
+                        int red = (colour[0] & 0xf8);
+                        int green = ((colour[0] & 0x07) << 5) | ((colour[1] & 0xc0) >> 3);
+                        int blue = (colour[1] & 0x3e) << 2;
 
-                    imageData.Add((byte)blue);  // Append(blue);
-                    imageData.Add((byte)green); // append(green);
-                    imageData.Add((byte)red); // append(red);
+                        imageData.Add((byte)blue);
+                        imageData.Add((byte)green);
+                        imageData.Add((byte)red);
+                    }
                 }
             }
-
-            Console.WriteLine($"image size should equal 921654... it is actually {imageData.Count}");
 
             using (var fs = new FileStream(filename, FileMode.OpenOrCreate))
             {
                 fs.Write(imageData.ToArray(), 0, imageData.Count);
             }
-
-        }
-
-
-        
+            Console.WriteLine("Screenshot taken!");
+        }  
 
     }
-
-    
 }
