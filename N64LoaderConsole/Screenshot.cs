@@ -12,7 +12,7 @@ namespace N64LoaderConsole
     {
         public static void TakeScreenshot(SerialPortStream IoPort, string filename)
         {
-            //TODO: Is there a better way to pole the ED64 for its current resolution and go from there!
+            //TODO: Is there a better way to receive the current resolution from the ED64!
             var resPacket = new CommandPacket(CommandPacket.Command.ScreenResolution);
             resPacket.Send(IoPort);
 
@@ -61,7 +61,6 @@ namespace N64LoaderConsole
                 //BITMAPINFOHEADER
                 0x28, 0x00, 0x00, 0x00, //(Length = 40 bytes)
                 0x80, 0x02, 0x00, 0x00, //(Bitmap width signed int = 640)
-                //0xE0, 0x01, 0x00, 0x00, //(Bitmap height signed int = 480)
                 0x20, 0xFE, 0xFF, 0xFF, //(Bitmap height signed int = -480 for "topdown")
                 0x01, 0x00, //(number of colour planes MUST BE 1)
                 0x18, 0x00, //(number of bits per pixel = 24)
@@ -80,13 +79,13 @@ namespace N64LoaderConsole
             bmpHeader[4] = 0;
             bmpHeader[5] = 0;
 
-            //image width
+            //image width (using short as the max res is 640)
             bmpHeader[18] = (byte)(width & 0xff);
             bmpHeader[19] = (byte)(width >> 8);
             bmpHeader[20] = 0;
             bmpHeader[21] = 0;
 
-            //negitive height for "top-down" bitmap
+            //negitive height for "top-down" bitmap (using short as the max res is 480)
             var topdownHeight = height * -1;
             bmpHeader[22] = (byte)(topdownHeight & 0xff);
             bmpHeader[23] = (byte)(topdownHeight >> 8);
