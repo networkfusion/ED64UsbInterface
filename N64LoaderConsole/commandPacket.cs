@@ -14,13 +14,13 @@ namespace N64LoaderConsole
 
         public enum Command : byte
         {
-            Fill = 70, //char 'F'
-            ReadRom = 82, //char 'R'
-            StartRom = 83, //char 'S'
-            TestConnection = 84, //char 'T'
-            WriteRom = 87, // char 'W'
-            Picture = 80, //char 'P'
-            ScreenResolution = 82, //char 'R'
+            Fill = 70, //char 'F' ill
+            ReadRom = 82, //char 'R' ead
+            StartRom = 83, //char 'S' tart
+            TestConnection = 84, //char 'T' est
+            WriteRom = 87, // char 'W' rite
+            Picture = 67,//char 'C' apture
+            ScreenResolution = 80, //char 'P' ixels
         }
 
         public CommandPacket(Command command)
