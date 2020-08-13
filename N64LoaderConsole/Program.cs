@@ -27,7 +27,7 @@ namespace N64LoaderConsole
             Console.WriteLine("****************************************");
             if (args.Length != 0 && !string.IsNullOrEmpty(args[0]))
             {
-                if (InitialiseSerialPort())
+                if (InitializeSerialPort())
                 {
                     Console.WriteLine("Preparing ROM for flash cart...");
                     //TODO: detect file type is correct, if not convert
@@ -56,7 +56,7 @@ namespace N64LoaderConsole
             }
             else
             {
-                if (InitialiseSerialPort())
+                if (InitializeSerialPort())
                 {
                     Console.WriteLine(@"Menu:");
                     Console.WriteLine(@"1) Take a screenshot.");
@@ -113,7 +113,7 @@ namespace N64LoaderConsole
             }
         }
 
-        private static bool InitialiseSerialPort()
+        private static bool InitializeSerialPort()
         {            
             Console.WriteLine("Waiting for Everdrive64 USB to be connected");
             while (FindDevice.FindFdtiUsbDevices().Where(p => p.nodeDescription == "FT245R USB FIFO").Count() == 0)
@@ -135,6 +135,26 @@ namespace N64LoaderConsole
                     IoPort.Read(receiveBuffer, 0 , 512); //should be 4 if not 512
                     //ReadResponse(port, 4); //expect RSPk
 
+                    if (receiveBuffer[3] == (char)'k' && receiveBuffer[4] == (char)'3') //(Unofficial OS EDV3)
+                    {
+                        Console.WriteLine("Connected to EverDrive64 V3 on port: {0}", device.nodeComportName);
+                        switch ((char)receiveBuffer[5])
+                        {
+                            case 'p':
+                                Console.WriteLine("PAL region detected");
+                                break;
+                            case 'n':
+                                Console.WriteLine("NTSC region detected");
+                                break;
+                            case 'm':
+                                Console.WriteLine("MPAL region detected");
+                                break;
+                            default:
+                                Console.WriteLine("Unknown region detected");
+                                break;
+                        }
+                        return true;
+                    }
                     if (receiveBuffer[3] == 107) //k
                     {
                         Console.WriteLine("Connected to EverDrive64 on port: {0}", device.nodeComportName);
